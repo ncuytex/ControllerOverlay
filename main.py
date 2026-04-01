@@ -2,7 +2,7 @@ import sys
 from PyQt5.QtWidgets import QApplication
 from PyQt5.QtCore import QTimer
 
-from gamepad import GamepadManager
+from gamepad import GamepadManager, ControllerType
 from overlay import ControllerOverlay
 from tray import TrayController
 from themes import THEMES
@@ -25,7 +25,12 @@ def main():
     # Create tray
     def get_name():
         if gamepad.state.connected:
-            return gamepad.state.name
+            ct = gamepad.state.controller_type
+            type_str = {
+                ControllerType.XBOX: "Xbox",
+                ControllerType.DUALSENSE: "DualSense",
+            }.get(ct, "Gamepad")
+            return f"{gamepad.state.name} ({type_str})"
         return "未连接"
 
     tray = TrayController(get_controller_name=get_name)

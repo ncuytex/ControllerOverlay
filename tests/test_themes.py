@@ -3,14 +3,22 @@ import pytest
 from themes import THEMES, Theme
 
 
+REQUIRED_HIGHLIGHTS = (
+    "a", "b", "x", "y", "lb", "rb", "lt", "rt",
+    "dpad", "dpad_up", "dpad_down", "dpad_left", "dpad_right",
+    "ls", "rs", "ls_click", "rs_click",
+    "start", "back", "guide",
+    "misc1", "touchpad",
+)
+
+
 def test_all_themes_have_required_fields():
     for name, theme in THEMES.items():
         assert isinstance(theme, Theme)
         assert len(theme.body_fill) == 7  # "#RRGGBB"
         assert len(theme.outline) == 7
         assert len(theme.btn_default) == 7
-        for btn in ("a", "b", "x", "y", "lb", "rb", "lt", "rt",
-                     "dpad", "ls", "rs", "start", "back", "guide"):
+        for btn in REQUIRED_HIGHLIGHTS:
             assert btn in theme.highlight, f"Missing highlight for {btn} in {name}"
 
 
