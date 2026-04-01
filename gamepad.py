@@ -50,6 +50,12 @@ class GamepadManager:
 
     def init_sdl(self):
         """Initialize SDL2 joystick subsystem. Returns True on success."""
+        import os
+        try:
+            import sdl2dll
+            os.environ["PYSDL2_DLL_PATH"] = os.path.join(os.path.dirname(sdl2dll.__file__), "dll")
+        except ImportError:
+            pass
         import sdl2
 
         ret = sdl2.SDL_Init(sdl2.SDL_INIT_JOYSTICK)

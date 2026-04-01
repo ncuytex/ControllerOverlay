@@ -151,10 +151,10 @@ class ControllerOverlay(QWidget):
         p.setBrush(QColor(theme.btn_default))
         p.drawEllipse(lcx - lr, lcy - lr, lr * 2, lr * 2)
 
-        ls_ox = state.axes.get("ls_x", 0) * STICK_MAX_OFFSET
-        ls_oy = state.axes.get("ls_y", 0) * STICK_MAX_OFFSET
+        ls_ox = int(state.axes.get("ls_x", 0) * STICK_MAX_OFFSET)
+        ls_oy = int(state.axes.get("ls_y", 0) * STICK_MAX_OFFSET)
         ldx, ldy, ldr = LAYOUT["ls_dot"]
-        ls_active = abs(ls_ox) > 0.5 or abs(ls_oy) > 0.5
+        ls_active = abs(ls_ox) > 0 or abs(ls_oy) > 0
         color = theme.highlight["ls"] if ls_active else theme.outline
         p.setPen(Qt.NoPen)
         p.setBrush(QColor(color))
@@ -166,10 +166,10 @@ class ControllerOverlay(QWidget):
         p.setBrush(QColor(theme.btn_default))
         p.drawEllipse(rcx - rr, rcy - rr, rr * 2, rr * 2)
 
-        rs_ox = state.axes.get("rs_x", 0) * STICK_MAX_OFFSET
-        rs_oy = state.axes.get("rs_y", 0) * STICK_MAX_OFFSET
+        rs_ox = int(state.axes.get("rs_x", 0) * STICK_MAX_OFFSET)
+        rs_oy = int(state.axes.get("rs_y", 0) * STICK_MAX_OFFSET)
         rdx, rdy, rdr = LAYOUT["rs_dot"]
-        rs_active = abs(rs_ox) > 0.5 or abs(rs_oy) > 0.5
+        rs_active = abs(rs_ox) > 0 or abs(rs_oy) > 0
         color = theme.highlight["rs"] if rs_active else theme.outline
         p.setPen(Qt.NoPen)
         p.setBrush(QColor(color))
