@@ -440,40 +440,23 @@ class SvgRenderer:
         if len(els) < 2:
             return
 
-        # Determine inner vs outer by bounding box approximation
-        # We compare the first coordinate pair in the 'd' attribute
-        def _first_coord(el):
-            d = el.get('d', '').strip()
-            m = re.match(r'M\s*([\d.]+)[,\s]+([\d.]+)', d)
-            return (float(m.group(1)), float(m.group(2))) if m else (0, 0)
-
-        centers = [_first_coord(el) for el in els]
-        # The one closer to the known stick center is inner
-        centers_map = {'ls': (124, 64), 'rs': (260, 117)}
-        sc = centers_map.get(stick, (0, 0))
-        dists = [((c[0] - sc[0])**2 + (c[1] - sc[1])**2) for c in centers]
-
-        # Both are close; instead, identify by path complexity
-        # The outer ring path tends to be longer. Use 'd' attribute length.
+        # Identify outer vs inner by path length (outer ring is more complex)
         if len(els[0].get('d', '')) > len(els[1].get('d', '')):
             outer, inner = els[0], els[1]
         else:
             outer, inner = els[1], els[0]
 
         if mag > 0.02:
-            # Outer ring: fill with intensity proportional to magnitude
-            outer.set('fill', color)
-            outer.set('fill-opacity', f'{min(mag * 0.5, 0.5):.2f}')
-
-            # Inner circle: translate for 360° displacement + fill highlight
+            # Inner circle: shrink to 50%, displace within outer ring, fill
             centers = {'ls': (124, 64), 'rs': (260, 117)}
             cx, cy = centers.get(stick, (0, 0))
-            dx = x * 5.0
-            dy = y * 5.0
-            inner.set('transform', f'translate({dx:.2f},{dy:.2f})')
+            dx = x * 10.0
+            dy = y * 10.0
+            inner.set('transform',
+                      f'translate({cx + dx:.2f},{cy + dy:.2f}) '
+                      f'scale(0.5) translate({-cx:.2f},{-cy:.2f})')
             inner.set('fill', color)
             inner.set('fill-opacity', f'{min(mag, 1.0):.2f}')
-            inner.set('stroke', color)
         elif self._buttons.get(f'{stick}_click'):
             # Only clicked, no movement
             for el in els:
@@ -494,17 +477,11 @@ class SvgRenderer:
             return
 
         if mag > 0.02:
-            # Outer ring fill intensity
-            outer_el.set('fill', color)
-            outer_el.set('fill-opacity', f'{min(mag * 0.5, 0.5):.2f}')
-
-            # Inner circle displacement + fill
-            # DualSense viewBox is 128x128; max displacement ~5 SVG units
-            scale = 5.0
+            # Inner circle: displace within outer ring, fill
+            scale = 4.0
             dx = x * scale
             dy = y * scale
 
-            # Shrink inner to 50%: get current center, apply scale transform
             centers = {'ls': (45.5, 64.5), 'rs': (82.5, 64.5)}
             cx, cy = centers.get(stick, (64, 64))
 
