@@ -76,7 +76,10 @@ class ControllerOverlay(QWidget):
     # ------------------------------------------------------------------
 
     def _poll(self):
-        self.gamepad.poll()
+        try:
+            self.gamepad.poll()
+        except Exception:
+            return
         state = self.gamepad.state
 
         new_type = state.controller_type if state.connected else None
@@ -108,6 +111,10 @@ class ControllerOverlay(QWidget):
         # --- Triggers: renderer has its own threshold ---
         lt = state.axes.get('lt', 0.0)
         rt = state.axes.get('rt', 0.0)
+        # Ensure trigger colors are always available (they are axes, not buttons)
+        for axis_name in ('lt', 'rt'):
+            if axis_name not in self.renderer._colors:
+                self.renderer._colors[axis_name] = self.theme.highlight.get(axis_name, '#FF4444')
         self.renderer.on_trigger_changed(lt, rt)
 
         # --- Joysticks: renderer has its own threshold ---
@@ -124,6 +131,9 @@ class ControllerOverlay(QWidget):
     def set_theme(self, theme: Theme):
         self.theme = theme
         self._prev_buttons.clear()  # Force re-push with new colors
+        # Clear trigger colors so they get refreshed with new theme
+        self.renderer._colors.pop('lt', None)
+        self.renderer._colors.pop('rt', None)
         self.renderer._dirty = True
         self.update()
 
@@ -208,7 +218,7 @@ class ControllerOverlay(QWidget):
 
         # --- Layout: main controller + triggers above ---
         if ctype == ControllerType.DUALSENSE:
-            trigger_space = int(wh * 0.15)
+            trigger_space = int(wh * 0.10)
             main_h = wh - trigger_space
             main_w = int(main_h * (128.0 / 128.0))  # Square aspect
             if main_w > ww:
@@ -250,12 +260,16 @@ class ControllerOverlay(QWidget):
             off = offsets.get(side, {})
             cx_frac = off.get('center_x_frac', 0.5)
             gap = off.get('gap_px', 2)
+            overlap_frac = off.get('overlap_frac', 0.0)
 
             trig_cx = main_x + int(cx_frac * main_w)
             tw = trig_pm.width()
             th = trig_pm.height()
             tx = trig_cx - tw // 2
-            ty = main_y - th - gap
+            # overlap_frac: fraction of main_h to push trigger down into the main
+            # image, compensating for whitespace between SVG top edge and shoulder
+            overlap = int(overlap_frac * main_h)
+            ty = main_y - th - gap + overlap
 
             p.drawPixmap(tx, ty, trig_pm)
 

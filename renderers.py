@@ -102,11 +102,13 @@ DS_TRIGGER_OFFSETS = {
         "center_x_frac": 29.0 / 128.0,
         "width_frac":     14.0 / 128.0,
         "gap_px":         2,
+        "overlap_frac":   26.0 / 128.0,   # Shoulder top at ~y=26 in 128-unit SVG
     },
     "right": {
         "center_x_frac": 99.0 / 128.0,
         "width_frac":     14.0 / 128.0,
         "gap_px":         2,
+        "overlap_frac":   26.0 / 128.0,
     },
 }
 

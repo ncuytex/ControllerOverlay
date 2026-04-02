@@ -166,7 +166,7 @@ class SvgRenderer:
         old_l, old_r = self._triggers['lt'], self._triggers['rt']
         self._triggers['lt'] = left
         self._triggers['rt'] = right
-        if abs(left - old_l) > _ANALOG_THRESHOLD or abs(right - old_r) > _ANALOG_THRESHOLD:
+        if abs(left - old_l) > 0.005 or abs(right - old_r) > 0.005:
             self._dirty = True
 
     def on_joystick_changed(self, lx, ly, rx, ry):
@@ -227,8 +227,17 @@ class SvgRenderer:
         lo = offsets.get('left', {})
         trig_w = int(main_w * lo.get('width_frac', 0.12))
         trig_h = int(trig_w * (138.0 / 90.0))   # original aspect ratio
-        self._cache['lt'] = _svg_to_pixmap(lt, trig_w, trig_h) if lt else QPixmap()
-        self._cache['rt'] = _svg_to_pixmap(rt, trig_w, trig_h) if rt else QPixmap()
+
+        # Use QPainter-based clipping for proportional trigger fill
+        # (QSvgRenderer silently ignores SVG clipPath)
+        lt_val = self._triggers['lt']
+        rt_val = self._triggers['rt']
+        self._cache['lt'] = self._render_trigger_pixmap(
+            self._trigger_templates.get('left'), lt_val,
+            trig_w, trig_h, 'lt', self._colors)
+        self._cache['rt'] = self._render_trigger_pixmap(
+            self._trigger_templates.get('right'), rt_val,
+            trig_w, trig_h, 'rt', self._colors)
 
         self._dirty = False
         return self._cache
@@ -351,70 +360,81 @@ class SvgRenderer:
     # ------------------------------------------------------------------
 
     def _apply_triggers(self, lt_root, rt_root):
-        """Apply progressive trigger fill using linearGradient on path fill."""
+        """Set trigger shape fill to highlight color when pressed.
+
+        The proportional fill (0–100%) is handled at paint time via
+        QPainter.setClipRect, because QSvgRenderer silently ignores
+        SVG clipPath elements.  Here we only set the fill color on
+        the path element so the shape is fully colored.
+        """
         for side, root, axis_name in [('left', lt_root, 'lt'),
                                        ('right', rt_root, 'rt')]:
             if root is None:
                 continue
             val = self._triggers[axis_name]
-            if val < 0.01:
+            if val < 0.005:
                 continue
 
             color = self._colors.get(axis_name, '#FF4444')
 
             shape_el = _find_by_id(root, f'{side}_trigger_shape')
             if shape_el is None:
-                continue
+                continue            # Set fill color; keep original stroke for outline
+            shape_el.set('fill', color)
 
-            _, _, vb_w, vb_h = _viewbox(root)
+    # ------------------------------------------------------------------
+    # Trigger pixmap generation with proportional fill
+    # ------------------------------------------------------------------
 
-            # Add <defs> with linearGradient
-            defs = root.find(f'{_NS}defs')
-            if defs is None:
-                defs = ET.SubElement(root, f'{_NS}defs')
-                root.remove(defs)
-                root.insert(0, defs)
+    @staticmethod
+    def _render_trigger_pixmap(tmpl_root, val, width, height, axis_name, colors):
+        """Render a trigger pixmap with proportional fill from the bottom.
 
-            # Full fill — set color directly
-            if val >= 0.99:
-                shape_el.set('fill', color)
-                shape_el.set('fill-opacity', '0.7')
-                continue
+        Uses QPainter.setClipRect (native Qt clipping) instead of SVG
+        clipPath, because QSvgRenderer does not support clipPath.
 
-            grad_id = f'{side}_fill_gradient'
-            for old in defs.findall(f'{_NS}linearGradient'):
-                if old.get('id') == grad_id:
-                    defs.remove(old)
+        Layers:
+        1. Base: original trigger outline (stroke-only, fill=none)
+        2. Fill: fully-colored trigger shape, clipped to bottom *val* fraction
+        """
+        if tmpl_root is None or width < 1 or height < 1:
+            return QPixmap()
 
-            lg = ET.SubElement(defs, f'{_NS}linearGradient')
-            lg.set('id', grad_id)
-            lg.set('gradientUnits', 'userSpaceOnUse')
-            lg.set('x1', '0')
-            lg.set('y1', str(vb_h))       # bottom
-            lg.set('x2', '0')
-            lg.set('y2', '0')             # top
+        # --- Render the outline (original, stroke-only) ---
+        outline_root = copy.deepcopy(tmpl_root)
+        outline_pm = _svg_to_pixmap(outline_root, width, height)
 
-            # Bottom portion: highlight color
-            s1 = ET.SubElement(lg, f'{_NS}stop')
-            s1.set('offset', '0')
-            s1.set('stop-color', color)
-            s1.set('stop-opacity', '0.7')
+        if val < 0.005:
+            return outline_pm
 
-            s2 = ET.SubElement(lg, f'{_NS}stop')
-            s2.set('offset', f'{val:.4f}')
-            s2.set('stop-color', color)
-            s2.set('stop-opacity', '0.7')
+        color = colors.get(axis_name, '#FF4444')
 
-            # Upper portion: original fill (#222222)
-            s3 = ET.SubElement(lg, f'{_NS}stop')
-            s3.set('offset', f'{val:.4f}')
-            s3.set('stop-color', '#222222')
+        # --- Render a fully-filled version (same shape, solid fill) ---
+        fill_root = copy.deepcopy(tmpl_root)
+        # Find the path element and set fill color
+        for el in fill_root.iter(f'{_NS}path'):
+            el.set('fill', color)
+            el.set('stroke', 'none')
+            el.set('opacity', '1')
+            el.set('fill-opacity', '1')
+        fill_pm = _svg_to_pixmap(fill_root, width, height)
 
-            s4 = ET.SubElement(lg, f'{_NS}stop')
-            s4.set('offset', '1')
-            s4.set('stop-color', '#222222')
+        # --- Compose: fill (clipped) on top of outline ---
+        pm = QPixmap(width, height)
+        pm.fill(Qt.transparent)
+        p = QPainter(pm)
+        p.setRenderHint(QPainter.Antialiasing)
 
-            shape_el.set('fill', f'url(#{grad_id})')
+        # Draw outline first
+        p.drawPixmap(0, 0, outline_pm)
+
+        # Draw filled version clipped to bottom val fraction
+        clip_y = int(height * (1.0 - val))
+        p.setClipRect(0, clip_y, width, height - clip_y)
+        p.drawPixmap(0, 0, fill_pm)
+
+        p.end()
+        return pm
 
     # ------------------------------------------------------------------
     # Joystick displacement & intensity
@@ -446,23 +466,27 @@ class SvgRenderer:
         else:
             outer, inner = els[1], els[0]
 
+        centers = {'ls': (124, 64), 'rs': (260, 117)}
+        cx, cy = centers.get(stick, (0, 0))
+
         if mag > 0.02:
-            # Inner circle: shrink to 50%, displace within outer ring, fill
-            centers = {'ls': (124, 64), 'rs': (260, 117)}
-            cx, cy = centers.get(stick, (0, 0))
             dx = x * 10.0
             dy = y * 10.0
             inner.set('transform',
                       f'translate({cx + dx:.2f},{cy + dy:.2f}) '
                       f'scale(0.5) translate({-cx:.2f},{-cy:.2f})')
-            inner.set('fill', color)
-            inner.set('fill-opacity', f'{min(mag, 1.0):.2f}')
         elif self._buttons.get(f'{stick}_click'):
             # Only clicked, no movement
-            for el in els:
-                el.set('stroke', color)
-                el.set('fill', color)
-                el.set('fill-opacity', '0.5')
+            inner.set('transform',
+                      f'translate({cx:.2f},{cy:.2f}) '
+                      f'scale(0.5) translate({-cx:.2f},{-cy:.2f})')
+            inner.set('stroke', color)
+            inner.set('fill', color)
+        else:
+            # At rest: inner circle always 50% size, centered
+            inner.set('transform',
+                      f'translate({cx:.2f},{cy:.2f}) '
+                      f'scale(0.5) translate({-cx:.2f},{-cy:.2f})')
 
     def _apply_ds_joystick(self, root, stick, x, y, mag, color):
         jmap = JOYSTICK_MAPS.get(ControllerType.DUALSENSE, {}).get(stick, {})
@@ -476,21 +500,22 @@ class SvgRenderer:
         if outer_el is None or inner_el is None:
             return
 
+        centers = {'ls': (45.5, 64.5), 'rs': (82.5, 64.5)}
+        cx, cy = centers.get(stick, (64, 64))
+
         if mag > 0.02:
-            # Inner circle: displace within outer ring, fill
             scale = 4.0
             dx = x * scale
             dy = y * scale
 
-            centers = {'ls': (45.5, 64.5), 'rs': (82.5, 64.5)}
-            cx, cy = centers.get(stick, (64, 64))
-
             inner_el.set('transform',
                          f'translate({cx + dx:.2f},{cy + dy:.2f}) scale(0.5) translate({-cx:.2f},{-cy:.2f})')
-            inner_el.set('fill', color)
-            inner_el.set('fill-opacity', f'{min(mag, 1.0):.2f}')
         elif self._buttons.get(f'{stick}_click'):
             # Just clicked
-            outer_el.set('fill', color)
-            outer_el.set('fill-opacity', '0.5')
+            inner_el.set('transform',
+                         f'translate({cx:.2f},{cy:.2f}) scale(0.5) translate({-cx:.2f},{-cy:.2f})')
             inner_el.set('fill', color)
+        else:
+            # At rest: inner circle always 50% size, centered
+            inner_el.set('transform',
+                         f'translate({cx:.2f},{cy:.2f}) scale(0.5) translate({-cx:.2f},{-cy:.2f})')

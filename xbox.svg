@@ -90,7 +90,7 @@ M193.000000,112.500000
 	C190.724625,113.478096 188.331711,112.964195 185.999893,112.973312 
 	C172.166779,113.027382 158.333328,113.000000 144.500000,113.000000 
 "/>
-<path fill="none" class="D_Pad_Line" opacity="1.000000" stroke="#000000" stroke-linecap="round" stroke-linejoin="round" stroke-width="4.000000"
+<path fill="none" class="D_Pad_Line" opacity="1.000000" stroke="#000000" stroke-linecap="round" stroke-linejoin="round" stroke-width="3.000000"
 	d="
 M192.500000,130.500000 
 	C176.500000,130.500000 160.500000,130.500000 144.500000,130.500000 
@@ -100,7 +100,7 @@ M192.500000,130.500000
 M177.500000,113.500000 
 	C176.678329,124.500000 176.670395,135.500000 177.500000,146.500000 
 "/>
-<path fill="none" class="D_Pad_Line" opacity="1.000000" stroke="#000000" stroke-linecap="round" stroke-linejoin="round" stroke-width="4.000000"
+<path fill="none" class="D_Pad_Line" opacity="1.000000" stroke="#000000" stroke-linecap="round" stroke-linejoin="round" stroke-width="3.000000"
 	d="
 M159.000000,98.000000 
 	C160.122162,106.481262 159.296783,115.000648 159.469177,123.500626 

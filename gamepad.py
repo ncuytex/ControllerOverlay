@@ -188,7 +188,7 @@ class GamepadManager:
         self.state.controller_type = detect_controller_type(self.state.name)
 
     def close(self):
-        """Close current controller and quit SDL."""
+        """Close current controller and shut down SDL."""
         import sdl2
 
         if self._controller:
@@ -198,10 +198,15 @@ class GamepadManager:
             sdl2.SDL_JoystickClose(self._joystick)
         self._joystick = None
         self.state.connected = False
+        self._reset_state()
         sdl2.SDL_Quit()
 
     def poll(self):
-        """Poll SDL events and read current controller state."""
+        """Poll SDL events and read current controller state.
+
+        Keeps running even when no controller is connected, so that
+        hot-plug reconnection events are always detected.
+        """
         import sdl2
 
         sdl2.SDL_PumpEvents()
@@ -214,23 +219,27 @@ class GamepadManager:
                     self._open(event.cdevice.which)
             elif etype == sdl2.SDL_CONTROLLERDEVICEREMOVED:
                 if self._controller and sdl2.SDL_GameControllerInstanceID(self._controller) == event.cdevice.which:
-                    sdl2.SDL_GameControllerClose(self._controller)
+                    # SDL2 already closes the controller when delivering this
+                    # event — calling SDL_GameControllerClose again would be
+                    # a double-free (segfault on Windows).
                     self._controller = None
                     self._joystick = None
                     self.state.connected = False
                     self.state.name = ""
                     self.state.controller_type = ControllerType.UNKNOWN
+                    self._reset_state()
             elif etype == sdl2.SDL_JOYDEVICEADDED:
                 if not self.state.connected and not self._controller:
                     self._open(event.jdevice.which)
             elif etype == sdl2.SDL_JOYDEVICEREMOVED:
                 if self._joystick and not self._controller:
                     if sdl2.SDL_JoystickInstanceID(self._joystick) == event.jdevice.which:
-                        sdl2.SDL_JoystickClose(self._joystick)
+                        # SDL2 already closes the joystick — avoid double-free.
                         self._joystick = None
                         self.state.connected = False
                         self.state.name = ""
                         self.state.controller_type = ControllerType.UNKNOWN
+                        self._reset_state()
 
         if not self._joystick and not self._controller:
             return self.state
@@ -241,6 +250,11 @@ class GamepadManager:
             self._poll_gamecontroller()
 
         return self.state
+
+    def _reset_state(self):
+        """Reset all button/axis state to defaults after disconnect."""
+        self.state.buttons = {name: False for name in BUTTON_NAMES}
+        self.state.axes = {name: 0.0 for name in AXIS_NAMES}
 
     def _poll_gamecontroller(self):
         """Poll using SDL_GameController API (standardized mapping)."""
