@@ -1,88 +1,139 @@
+"""SVG element ID mappings and trigger positioning data.
+
+Maps gamepad logical button names to SVG element IDs/classes,
+provides joystick element references, and defines trigger placement
+offsets relative to the main controller SVG.
+"""
+
 from gamepad import ControllerType
 
 # ---------------------------------------------------------------------------
-# Stick visual offset (in SVG coordinate units)
-# ---------------------------------------------------------------------------
-STICK_MAX_OFFSET = 15
-
-# ---------------------------------------------------------------------------
-# Button highlight areas: (x, y, w, h, shape)
-#   shape: "ellipse" for round buttons, "roundrect" for rectangular
-#   All coordinates are in SVG viewBox units
-#   *** YOU MUST ADJUST THESE TO MATCH YOUR SVG ***
+# Button → SVG element ID mappings
+# Each value is a list of element IDs whose attributes should be modified.
+# For Xbox, elements are stroke-only outlines.
+# For DualSense, elements are filled shapes.
 # ---------------------------------------------------------------------------
 
-XBOX_BUTTONS = {
-    # Face buttons (diamond layout, right side)
-    "a": (307, 106, 26, 26, "ellipse"),    # bottom
-    "b": (335, 83, 26, 26, "ellipse"),     # right
-    "x": (280, 83, 26, 26, "ellipse"),     # left
-    "y": (307, 60, 26, 26, "ellipse"),     # top
-    # Bumpers
-    "lb": (78, 40, 72, 14, "roundrect"),
-    "rb": (277, 40, 72, 14, "roundrect"),
-    # Triggers (highlight when axis > threshold)
-    "lt": (86, 18, 62, 18, "roundrect"),
-    "rt": (279, 18, 62, 18, "roundrect"),
-    # D-pad (left side)
-    "dpad_up": (126, 142, 18, 24, "roundrect"),
-    "dpad_down": (126, 170, 18, 24, "roundrect"),
-    "dpad_left": (108, 154, 24, 18, "roundrect"),
-    "dpad_right": (138, 154, 24, 18, "roundrect"),
-    # Menu buttons (center)
-    "back": (183, 74, 16, 12, "ellipse"),   # View
-    "start": (240, 74, 16, 12, "ellipse"),  # Menu
-    "guide": (206, 56, 24, 18, "ellipse"),  # Xbox button
-    # Stick clicks
-    "ls_click": (117, 85, 44, 44, "ellipse"),
-    "rs_click": (237, 132, 44, 44, "ellipse"),
+XBOX_BUTTON_MAP = {
+    "a":        ["A"],
+    "b":        ["B"],
+    "x":        ["X"],
+    "y":        ["Y"],
+    "lb":       ["LB_top"],
+    "rb":       [],                       # No explicit RB element
+    "back":     ["View"],
+    "start":    ["Menu"],
+    "guide":    ["XBOX"],
+    "share":    ["Share"],
+    "ls_click": [],                       # Handled via class
+    "rs_click": [],                       # Handled via class
+    # D-pad handled separately via _apply_dpad_highlight
 }
 
-XBOX_STICKS = {
-    # (center_x, center_y, highlight_diameter) — for movement dot
-    "ls": (139, 107, 36),
-    "rs": (259, 154, 36),
+# D-pad center in Xbox SVG coordinate space (approximate bounding box of D_Pad)
+XBOX_DPAD_CENTER = (168, 123)
+XBOX_DPAD_RADIUS = 26
+
+# Joystick class names and order info for Xbox SVG
+# Left_Stick: 2 paths, Right_Stick: 2 paths
+# inner=smaller, outer=larger (determined by bounding box area)
+XBOX_STICK_CLASSES = {
+    "ls": "Left_Stick",
+    "rs": "Right_Stick",
 }
 
-DS_BUTTONS = {
-    # Face buttons □ × ○ △ (diamond layout, right side)
-    "a": (588, 270, 40, 40, "ellipse"),    # ×
-    "b": (634, 228, 40, 40, "ellipse"),    # ○
-    "x": (542, 228, 40, 40, "ellipse"),    # □
-    "y": (588, 186, 40, 40, "ellipse"),    # △
-    # Bumpers
-    "lb": (150, 68, 130, 26, "roundrect"),
-    "rb": (552, 68, 130, 26, "roundrect"),
-    # Triggers
-    "lt": (164, 30, 110, 34, "roundrect"),
-    "rt": (558, 30, 110, 34, "roundrect"),
-    # D-pad (left side)
-    "dpad_up": (230, 244, 28, 38, "roundrect"),
-    "dpad_down": (230, 298, 28, 38, "roundrect"),
-    "dpad_left": (196, 266, 38, 28, "roundrect"),
-    "dpad_right": (254, 266, 38, 28, "roundrect"),
-    # Create / Options / PS
-    "back": (315, 164, 40, 24, "roundrect"),    # Create
-    "start": (478, 164, 40, 24, "roundrect"),   # Options
-    "guide": (416, 308, 30, 30, "ellipse"),     # PS button
-    # Touchpad / Mic
-    "touchpad": (340, 130, 152, 60, "roundrect"),
-    "misc1": (416, 380, 26, 26, "ellipse"),     # Mic
-    # Stick clicks
-    "ls_click": (210, 384, 60, 60, "ellipse"),
-    "rs_click": (562, 384, 60, 60, "ellipse"),
+DS_BUTTON_MAP = {
+    "a":        ["Cross"],
+    "b":        ["Circle"],
+    "x":        ["Square"],
+    "y":        ["Triangle"],
+    "lb":       ["L1_Top"],
+    "rb":       ["R1_Top"],
+    "back":     [],                       # No Create element in SVG
+    "start":    [],                       # No Options element in SVG
+    "guide":    ["PS"],
+    "touchpad": ["Touchpad"],
+    "misc1":    ["Mic_Mute"],
+    "ls_click": ["Left_Stick_Outer", "Left_Stick_Inner"],
+    "rs_click": ["Right_Stick_Outer", "Right_Stick_Inner"],
+    "dpad_up":    ["DPad_Up"],
+    "dpad_down":  ["DPad_Down"],
+    "dpad_left":  ["DPad_Left"],
+    "dpad_right": ["DPad_Right"],
 }
 
-DS_STICKS = {
-    "ls": (240, 394, 50),
-    "rs": (592, 394, 50),
+DS_JOYSTICK_MAP = {
+    "ls": {"outer": "Left_Stick_Outer", "inner": "Left_Stick_Inner"},
+    "rs": {"outer": "Right_Stick_Outer", "inner": "Right_Stick_Inner"},
+}
+
+# DualSense stick centers in SVG coords (128x128 viewBox)
+# Derived from element geometry
+DS_STICK_CENTERS = {
+    "ls": (45.5, 64.5),
+    "rs": (82.5, 64.5),
+}
+
+# ---------------------------------------------------------------------------
+# Trigger placement offsets
+# Defined as fractions of the main SVG viewBox dimensions.
+# (x_fraction, y_offset_px, width_fraction)
+# Triggers are positioned ABOVE the shoulder buttons.
+# ---------------------------------------------------------------------------
+
+# Xbox: LB_top is at roughly x=271-323 out of 427
+# Symmetric RB at roughly x=104-156
+XBOX_TRIGGER_OFFSETS = {
+    "left": {
+        "center_x_frac": 297.0 / 427.0,    # Center of LB_top
+        "width_frac":     52.0 / 427.0,      # Shoulder width
+        "gap_px":         2,                  # Gap above shoulder
+    },
+    "right": {
+        "center_x_frac": 130.0 / 427.0,     # Symmetric to left
+        "width_frac":     52.0 / 427.0,
+        "gap_px":         2,
+    },
+}
+
+# DualSense: L1_Top at roughly x=22-36 out of 128, R1_Top at 92-106
+DS_TRIGGER_OFFSETS = {
+    "left": {
+        "center_x_frac": 29.0 / 128.0,
+        "width_frac":     14.0 / 128.0,
+        "gap_px":         2,
+    },
+    "right": {
+        "center_x_frac": 99.0 / 128.0,
+        "width_frac":     14.0 / 128.0,
+        "gap_px":         2,
+    },
 }
 
 # ---------------------------------------------------------------------------
 # Lookup by controller type
 # ---------------------------------------------------------------------------
-BUTTON_LAYOUTS = {
-    ControllerType.XBOX: (XBOX_BUTTONS, XBOX_STICKS),
-    ControllerType.DUALSENSE: (DS_BUTTONS, DS_STICKS),
-    ControllerType.UNKNOWN: (XBOX_BUTTONS, XBOX_STICKS),
+
+BUTTON_MAPS = {
+    ControllerType.XBOX:      XBOX_BUTTON_MAP,
+    ControllerType.DUALSENSE: DS_BUTTON_MAP,
+    ControllerType.UNKNOWN:   XBOX_BUTTON_MAP,
+}
+
+TRIGGER_OFFSETS = {
+    ControllerType.XBOX:      XBOX_TRIGGER_OFFSETS,
+    ControllerType.DUALSENSE: DS_TRIGGER_OFFSETS,
+    ControllerType.UNKNOWN:   XBOX_TRIGGER_OFFSETS,
+}
+
+JOYSTICK_MAPS = {
+    ControllerType.XBOX:      XBOX_STICK_CLASSES,
+    ControllerType.DUALSENSE: DS_JOYSTICK_MAP,
+    ControllerType.UNKNOWN:   XBOX_STICK_CLASSES,
+}
+
+STICK_CENTERS = {
+    ControllerType.XBOX:      {"ls": (124, 64), "rs": (260, 117)},
+    ControllerType.DUALSENSE: DS_STICK_CENTERS,
+    ControllerType.UNKNOWN:   {"ls": (124, 64), "rs": (260, 117)},
 }

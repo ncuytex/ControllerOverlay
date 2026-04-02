@@ -1,30 +1,26 @@
-import os
-import re
-import sys
-import base64
+"""overlay.py — Transparent, click-through overlay widget.
+
+Delegates all SVG rendering to SvgRenderer.  Positions the main
+controller image + trigger images in the widget, scaled and placed
+according to user settings.
+"""
+
 import ctypes
+import sys
+
 from PyQt5.QtWidgets import QWidget, QApplication
-from PyQt5.QtCore import Qt, QTimer, QRectF
-from PyQt5.QtGui import QPainter, QColor, QFont, QBrush, QPixmap
-from PyQt5.QtSvg import QSvgRenderer
+from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtGui import QPainter, QColor, QFont
 
 from gamepad import GamepadManager, ControllerType
 from themes import Theme
-from renderers import BUTTON_LAYOUTS, STICK_MAX_OFFSET
+from svg_renderer import SvgRenderer
+from renderers import TRIGGER_OFFSETS
 
-# Win32 constants for click-through
+# Win32 click-through
 GWL_EXSTYLE = -20
 WS_EX_TRANSPARENT = 0x00000020
 WS_EX_LAYERED = 0x00080000
-
-_TRIGGER_THRESHOLD = 0.05
-
-
-def _get_image_dir():
-    """Directory containing SVG files (works with PyInstaller too)."""
-    if getattr(sys, 'frozen', False):
-        return os.path.dirname(sys.executable)
-    return os.path.dirname(os.path.abspath(__file__))
 
 
 class ControllerOverlay(QWidget):
@@ -38,106 +34,14 @@ class ControllerOverlay(QWidget):
         self._pos_x = 90
         self._pos_y = 85
         self._scale = 30
-
-        # Cached controller images: ControllerType -> QPixmap
-        self._controller_images = {}
         self._current_type = None
-        self._load_controller_images()
 
+        # Previous state for change detection
+        self._prev_buttons = {}
+        self._prev_axes = {}
+
+        self.renderer = SvgRenderer()
         self._setup_window()
-
-    # ------------------------------------------------------------------
-    # Image loading
-    # ------------------------------------------------------------------
-
-    def _load_controller_images(self):
-        """Load controller images, render SVGs to cached QPixmaps."""
-        img_dir = _get_image_dir()
-
-        for ctype, filename in [
-            (ControllerType.XBOX, "xbox.svg"),
-            (ControllerType.DUALSENSE, "dualsense.svg"),
-        ]:
-            path = os.path.join(img_dir, filename)
-            if not os.path.exists(path):
-                print(f"Warning: Image not found: {path}")
-                continue
-
-            # Try rendering via QSvgRenderer first
-            pm = self._render_svg(path)
-            if pm and not pm.isNull() and self._pixmap_has_content(pm):
-                self._controller_images[ctype] = pm
-                continue
-
-            # QSvgRenderer failed (e.g. embedded raster in <pattern>)
-            # Try extracting embedded PNG from the SVG
-            pm = self._extract_png_from_svg(path)
-            if pm and not pm.isNull():
-                self._controller_images[ctype] = pm
-                continue
-
-            print(f"Warning: Could not load image: {path}")
-
-    @staticmethod
-    def _render_svg(path):
-        """Render an SVG file to a QPixmap via QSvgRenderer."""
-        renderer = QSvgRenderer(path)
-        if not renderer.isValid():
-            return None
-        sz = renderer.defaultSize()
-        pm = QPixmap(sz)
-        pm.fill(Qt.transparent)
-        p = QPainter(pm)
-        renderer.render(p)
-        p.end()
-        return pm
-
-    @staticmethod
-    def _extract_png_from_svg(path):
-        """Extract an embedded base64 PNG from an SVG file and load as QPixmap."""
-        try:
-            with open(path, 'r', encoding='utf-8') as f:
-                content = f.read()
-            match = re.search(r'xlink:href="data:image/png;base64,([^"]+)"', content)
-            if not match:
-                return None
-            png_data = base64.b64decode(match.group(1))
-            pm = QPixmap()
-            pm.loadFromData(png_data)
-            return pm if not pm.isNull() else None
-        except Exception:
-            return None
-
-    @staticmethod
-    def _pixmap_has_content(pm):
-        """Check if a pixmap has any non-transparent pixels."""
-        img = pm.toImage()
-        w, h = min(img.width(), 200), min(img.height(), 200)
-        step_x = max(1, img.width() // w)
-        step_y = max(1, img.height() // h)
-        for y in range(0, img.height(), step_y):
-            for x in range(0, img.width(), step_x):
-                if img.pixelColor(x, y).alpha() > 10:
-                    return True
-        return False
-
-    def _get_image(self, controller_type):
-        """Get cached pixmap for controller type, with Xbox as fallback."""
-        return (
-            self._controller_images.get(controller_type)
-            or self._controller_images.get(ControllerType.XBOX)
-        )
-
-    def _base_size(self):
-        """Get base image dimensions for the current controller."""
-        if self.gamepad.state.connected:
-            pm = self._get_image(self.gamepad.state.controller_type)
-            if pm:
-                return pm.width(), pm.height()
-        # Fallback: first available image
-        for pm in self._controller_images.values():
-            return pm.width(), pm.height()
-        return 500, 400
 
     # ------------------------------------------------------------------
     # Window setup
@@ -150,48 +54,77 @@ class ControllerOverlay(QWidget):
             | Qt.Tool
         )
         self.setAttribute(Qt.WA_TranslucentBackground)
-        self._apply_scale()
-        self._apply_position()
+        self._apply_geometry()
 
     def showEvent(self, event):
         super().showEvent(event)
-        # Enable click-through via Win32
         hwnd = int(self.winId())
         user32 = ctypes.windll.user32
         style = user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
-        user32.SetWindowLongW(hwnd, GWL_EXSTYLE, style | WS_EX_TRANSPARENT | WS_EX_LAYERED)
+        user32.SetWindowLongW(hwnd, GWL_EXSTYLE,
+                              style | WS_EX_TRANSPARENT | WS_EX_LAYERED)
         self._start_polling()
 
     def _start_polling(self):
         if not hasattr(self, '_timer'):
             self._timer = QTimer(self)
             self._timer.timeout.connect(self._poll)
-            self._timer.start(8)  # ~120Hz
+            self._timer.start(8)  # ~120 Hz
 
     # ------------------------------------------------------------------
-    # Polling — detect controller type changes for resize
+    # Polling
     # ------------------------------------------------------------------
 
     def _poll(self):
-        old_type = self._current_type
         self.gamepad.poll()
-        new_type = (
-            self.gamepad.state.controller_type
-            if self.gamepad.state.connected
-            else None
-        )
-        if old_type != new_type:
+        state = self.gamepad.state
+
+        new_type = state.controller_type if state.connected else None
+        if self._current_type != new_type:
             self._current_type = new_type
-            self._apply_scale()
-            self._apply_position()
+            self.renderer.set_controller_type(new_type)
+            self._prev_buttons.clear()
+            self._prev_axes.clear()
+            self._apply_geometry()
+
+        self._sync_state(state)
         self.update()
 
+    def _sync_state(self, state):
+        """Push changed gamepad state into SvgRenderer."""
+        if not state.connected:
+            return
+
+        # --- Buttons: only push changes ---
+        for name, pressed in state.buttons.items():
+            if self._prev_buttons.get(name) != pressed:
+                color = self.theme.highlight.get(name, '#FF4444')
+                if pressed:
+                    self.renderer.on_button_pressed(name, color)
+                else:
+                    self.renderer.on_button_released(name)
+                self._prev_buttons[name] = pressed
+
+        # --- Triggers: renderer has its own threshold ---
+        lt = state.axes.get('lt', 0.0)
+        rt = state.axes.get('rt', 0.0)
+        self.renderer.on_trigger_changed(lt, rt)
+
+        # --- Joysticks: renderer has its own threshold ---
+        lx = state.axes.get('ls_x', 0.0)
+        ly = state.axes.get('ls_y', 0.0)
+        rx = state.axes.get('rs_x', 0.0)
+        ry = state.axes.get('rs_y', 0.0)
+        self.renderer.on_joystick_changed(lx, ly, rx, ry)
+
     # ------------------------------------------------------------------
-    # Public setters
+    # Public setters (from tray signals)
     # ------------------------------------------------------------------
 
     def set_theme(self, theme: Theme):
         self.theme = theme
+        self._prev_buttons.clear()  # Force re-push with new colors
+        self.renderer._dirty = True
         self.update()
 
     def set_opacity(self, opacity: float):
@@ -205,21 +138,28 @@ class ControllerOverlay(QWidget):
 
     def set_scale(self, scale: int):
         self._scale = max(0, min(100, scale))
-        self._apply_scale()
-        self._apply_position()
+        self.renderer.resize_widget(scale)
+        self._apply_geometry()
 
     # ------------------------------------------------------------------
-    # Scale / position
+    # Geometry
     # ------------------------------------------------------------------
 
-    def _apply_scale(self):
+    def _base_aspect(self):
+        """Return (w, h) base aspect including trigger space above."""
+        ctype = self._current_type or ControllerType.XBOX
+        if ctype == ControllerType.DUALSENSE:
+            return 128, 168      # 128-wide, 128 main + 40 trigger space
+        return 427, 320          # 427-wide, 240 main + 80 trigger space
+
+    def _apply_geometry(self):
         if self._scale <= 0:
             self.hide()
             return
         if not self.isVisible():
             self.show()
 
-        base_w, base_h = self._base_size()
+        base_w, base_h = self._base_aspect()
         screen = QApplication.primaryScreen()
         if not screen:
             self.setFixedSize(base_w, base_h)
@@ -235,6 +175,7 @@ class ControllerOverlay(QWidget):
             w = int(h * aspect)
 
         self.setFixedSize(max(w, 80), max(h, 64))
+        self._apply_position()
 
     def _apply_position(self):
         screen = QApplication.primaryScreen()
@@ -262,99 +203,60 @@ class ControllerOverlay(QWidget):
             p.end()
             return
 
-        img = self._get_image(state.controller_type)
-        if img is None:
+        ctype = state.controller_type
+        ww, wh = self.width(), self.height()
+
+        # --- Layout: main controller + triggers above ---
+        if ctype == ControllerType.DUALSENSE:
+            trigger_space = int(wh * 0.24)
+            main_h = wh - trigger_space
+            main_w = int(main_h * (128.0 / 128.0))  # Square aspect
+            if main_w > ww:
+                main_w = ww
+                main_h = int(main_w / 1.0)
+            main_x = (ww - main_w) // 2
+            main_y = trigger_space
+        else:
+            trigger_space = int(wh * 0.25)
+            main_h = wh - trigger_space
+            main_w = int(main_h * (427.0 / 240.0))
+            if main_w > ww:
+                main_w = ww
+                main_h = int(main_w * (240.0 / 427.0))
+            main_x = (ww - main_w) // 2
+            main_y = trigger_space
+
+        # --- Render SVGs ---
+        pixmaps = self.renderer.render(main_w, main_h)
+        if pixmaps is None:
             p.setPen(QColor("#CCCCCC"))
             p.setFont(QFont("Microsoft YaHei", 14))
             p.drawText(self.rect(), Qt.AlignCenter, "未连接手柄")
             p.end()
             return
 
-        # --- Calculate image → widget mapping (keep aspect ratio, center) ---
-        img_w, img_h = img.width(), img.height()
-        ww, wh = self.width(), self.height()
+        # Draw main controller
+        main_pm = pixmaps.get('main')
+        if main_pm and not main_pm.isNull():
+            p.drawPixmap(main_x, main_y, main_pm)
 
-        aspect = img_w / img_h
-        if ww / wh > aspect:
-            draw_h = wh
-            draw_w = int(draw_h * aspect)
-        else:
-            draw_w = ww
-            draw_h = int(draw_w / aspect)
-        ox = (ww - draw_w) // 2
-        oy = (wh - draw_h) // 2
-
-        # --- 1. Draw cached controller image ---
-        p.drawPixmap(ox, oy, draw_w, draw_h, img)
-
-        # Scale factors: source coordinates → widget pixels
-        sx = draw_w / img_w
-        sy = draw_h / img_h
-
-        # --- 2. Draw button highlights ---
-        buttons, sticks = BUTTON_LAYOUTS.get(
-            state.controller_type,
-            BUTTON_LAYOUTS[ControllerType.UNKNOWN],
-        )
-
-        for name, (bx, by, bw, bh, shape) in buttons.items():
-            # Determine if pressed
-            if name in ("lt", "rt"):
-                pressed = state.axes.get(name, 0.0) > _TRIGGER_THRESHOLD
-            else:
-                pressed = state.buttons.get(name, False)
-            if not pressed:
+        # Draw triggers positioned above shoulder buttons
+        offsets = TRIGGER_OFFSETS.get(ctype, {})
+        for side, pm_key in [('left', 'lt'), ('right', 'rt')]:
+            trig_pm = pixmaps.get(pm_key)
+            if trig_pm is None or trig_pm.isNull():
                 continue
 
-            color = QColor(self.theme.highlight.get(name, "#00FF88"))
-            color.setAlpha(130)
-            p.setPen(Qt.NoPen)
-            p.setBrush(QBrush(color))
+            off = offsets.get(side, {})
+            cx_frac = off.get('center_x_frac', 0.5)
+            gap = off.get('gap_px', 2)
 
-            rx = ox + bx * sx
-            ry = oy + by * sy
-            rw = bw * sx
-            rh = bh * sy
+            trig_cx = main_x + int(cx_frac * main_w)
+            tw = trig_pm.width()
+            th = trig_pm.height()
+            tx = trig_cx - tw // 2
+            ty = main_y - th - gap
 
-            if shape == "ellipse":
-                p.drawEllipse(QRectF(rx, ry, rw, rh))
-            else:
-                rad = min(rw, rh) * 0.3
-                p.drawRoundedRect(QRectF(rx, ry, rw, rh), rad, rad)
-
-        # --- 3. Draw stick movement highlights ---
-        for stick_name, (cx, cy, diameter) in sticks.items():
-            ax = state.axes.get(f"{stick_name}_x", 0.0)
-            ay = state.axes.get(f"{stick_name}_y", 0.0)
-
-            # Always highlight base when stick is clicked
-            if state.buttons.get(f"{stick_name}_click", False):
-                color = QColor(self.theme.highlight.get(f"{stick_name}_click", "#00FF88"))
-                color.setAlpha(130)
-                p.setPen(Qt.NoPen)
-                p.setBrush(QBrush(color))
-                r = diameter / 2
-                p.drawEllipse(QRectF(
-                    ox + (cx - r) * sx,
-                    oy + (cy - r) * sy,
-                    diameter * sx,
-                    diameter * sy,
-                ))
-
-            # Movement dot (when stick is tilted)
-            if abs(ax) > 0.02 or abs(ay) > 0.02:
-                dot_cx = cx + int(ax * STICK_MAX_OFFSET)
-                dot_cy = cy + int(ay * STICK_MAX_OFFSET)
-                dot_r = diameter * 0.35  # smaller than full area
-                color = QColor(self.theme.highlight.get(f"{stick_name}_click", "#00FF88"))
-                color.setAlpha(100)
-                p.setPen(Qt.NoPen)
-                p.setBrush(QBrush(color))
-                p.drawEllipse(QRectF(
-                    ox + (dot_cx - dot_r) * sx,
-                    oy + (dot_cy - dot_r) * sy,
-                    dot_r * 2 * sx,
-                    dot_r * 2 * sy,
-                ))
+            p.drawPixmap(tx, ty, trig_pm)
 
         p.end()
