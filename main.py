@@ -42,12 +42,20 @@ def main():
     def on_opacity_changed(value):
         overlay.set_opacity(value)
 
+    def on_position_changed(pos_x, pos_y):
+        overlay.set_position(pos_x, pos_y)
+
+    def on_scale_changed(scale):
+        overlay.set_scale(scale)
+
     def on_quit():
         gamepad.close()
         app.quit()
 
     tray.theme_changed.connect(on_theme_changed)
     tray.opacity_changed.connect(on_opacity_changed)
+    tray.position_changed.connect(on_position_changed)
+    tray.scale_changed.connect(on_scale_changed)
     tray.quit_requested.connect(on_quit)
 
     # Periodically update tray status (every 2s)
