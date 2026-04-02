@@ -19,8 +19,8 @@ XBOX_BUTTON_MAP = {
     "b":        ["B"],
     "x":        ["X"],
     "y":        ["Y"],
-    "lb":       ["LB_top"],
-    "rb":       [],                       # No explicit RB element
+    "lb":       ["XBOX_LB_SHOULDER"],     # Left shoulder arc (injected at runtime)
+    "rb":       ["LB_top"],                # Right shoulder
     "back":     ["View"],
     "start":    ["Menu"],
     "guide":    ["XBOX"],
@@ -49,8 +49,8 @@ DS_BUTTON_MAP = {
     "y":        ["Triangle"],
     "lb":       ["L1_Top"],
     "rb":       ["R1_Top"],
-    "back":     [],                       # No Create element in SVG
-    "start":    [],                       # No Options element in SVG
+    "back":     ["L2_Seam"],              # Create button
+    "start":    ["R2_Seam"],              # Options button
     "guide":    ["PS"],
     "touchpad": ["Touchpad"],
     "misc1":    ["Mic_Mute"],
@@ -85,12 +85,12 @@ DS_STICK_CENTERS = {
 # Symmetric RB at roughly x=104-156
 XBOX_TRIGGER_OFFSETS = {
     "left": {
-        "center_x_frac": 297.0 / 427.0,    # Center of LB_top
-        "width_frac":     52.0 / 427.0,      # Shoulder width
-        "gap_px":         2,                  # Gap above shoulder
+        "center_x_frac": 130.0 / 427.0,     # Left shoulder (LB)
+        "width_frac":     52.0 / 427.0,
+        "gap_px":         2,
     },
     "right": {
-        "center_x_frac": 130.0 / 427.0,     # Symmetric to left
+        "center_x_frac": 297.0 / 427.0,     # Right shoulder (RB)
         "width_frac":     52.0 / 427.0,
         "gap_px":         2,
     },

@@ -149,8 +149,8 @@ class ControllerOverlay(QWidget):
         """Return (w, h) base aspect including trigger space above."""
         ctype = self._current_type or ControllerType.XBOX
         if ctype == ControllerType.DUALSENSE:
-            return 128, 168      # 128-wide, 128 main + 40 trigger space
-        return 427, 320          # 427-wide, 240 main + 80 trigger space
+            return 128, 152      # 128-wide, 128 main + 24 trigger space
+        return 427, 322          # 427-wide, 240 main + 82 trigger space
 
     def _apply_geometry(self):
         if self._scale <= 0:
@@ -208,7 +208,7 @@ class ControllerOverlay(QWidget):
 
         # --- Layout: main controller + triggers above ---
         if ctype == ControllerType.DUALSENSE:
-            trigger_space = int(wh * 0.24)
+            trigger_space = int(wh * 0.15)
             main_h = wh - trigger_space
             main_w = int(main_h * (128.0 / 128.0))  # Square aspect
             if main_w > ww:
@@ -217,7 +217,7 @@ class ControllerOverlay(QWidget):
             main_x = (ww - main_w) // 2
             main_y = trigger_space
         else:
-            trigger_space = int(wh * 0.25)
+            trigger_space = int(wh * 0.255)
             main_h = wh - trigger_space
             main_w = int(main_h * (427.0 / 240.0))
             if main_w > ww:

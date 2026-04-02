@@ -33,6 +33,14 @@ _XLINK = '{http://www.w3.org/1999/xlink}'
 # Minimum analog change to trigger a rebuild
 _ANALOG_THRESHOLD = 0.02
 
+# Left shoulder arc extracted from Left_Outer_Cognition in xbox.svg
+# (first 2 bezier segments spanning the LB arc)
+_XBOX_LB_SHOULDER_PATH = (
+    "M157.5,7 "
+    "C156.494186,4.175392 154.489044,3.118435 151.502716,2.951471 "
+    "C134.602905,2.006618 118.595711,5.154576 106.759605,17.744074"
+)
+
 
 def _image_dir():
     if getattr(sys, 'frozen', False):
@@ -193,6 +201,18 @@ class SvgRenderer:
         lt = copy.deepcopy(self._trigger_templates.get('left'))
         rt = copy.deepcopy(self._trigger_templates.get('right'))
 
+        # Inject left shoulder arc element for Xbox (extracted from
+        # Left_Outer_Cognition) so it can be highlighted independently.
+        if self._current_type in (ControllerType.XBOX, ControllerType.UNKNOWN):
+            lb = ET.SubElement(main, f'{_NS}path')
+            lb.set('id', 'XBOX_LB_SHOULDER')
+            lb.set('d', _XBOX_LB_SHOULDER_PATH)
+            lb.set('fill', 'none')
+            lb.set('stroke', '#000000')
+            lb.set('stroke-width', '3')
+            lb.set('stroke-linecap', 'round')
+            lb.set('stroke-linejoin', 'round')
+
         # --- Apply modifications ---
         self._apply_buttons(main)
         self._apply_triggers(lt, rt)
@@ -247,7 +267,7 @@ class SvgRenderer:
             self._apply_xbox_stick_click(root)
 
     def _apply_xbox_dpad(self, root):
-        """Highlight Xbox D-pad elements when any direction is pressed."""
+        """Highlight Xbox D-pad quadrants independently using D_Pad path copies."""
         dirs = ['dpad_up', 'dpad_down', 'dpad_left', 'dpad_right']
         active = [d for d in dirs if self._buttons.get(d)]
         if not active:
@@ -255,18 +275,15 @@ class SvgRenderer:
 
         color = self._colors.get('dpad_up', '#3498FF')
 
-        # Highlight D_Pad outline
+        # Highlight D_Pad stroke only (no fill on original)
         dpad = _find_by_id(root, 'D_Pad')
         if dpad is not None:
             dpad.set('stroke', color)
-            dpad.set('fill', color)
-            dpad.set('fill-opacity', '0.35')
 
         # Highlight cross lines
         for el in _find_all_by_class(root, 'D_Pad_Line'):
             el.set('stroke', color)
 
-        # Add quadrant fills for directional distinction
         cx, cy = XBOX_DPAD_CENTER
         r = XBOX_DPAD_RADIUS
 
@@ -279,6 +296,10 @@ class SvgRenderer:
 
         for d in active:
             clip_id = f'clip_dpad_{d}'
+            for old in defs.findall(f'{_NS}clipPath'):
+                if old.get('id') == clip_id:
+                    defs.remove(old)
+
             cp = ET.SubElement(defs, f'{_NS}clipPath')
             cp.set('id', clip_id)
             cliprect = ET.SubElement(cp, f'{_NS}rect')
@@ -303,15 +324,16 @@ class SvgRenderer:
                 cliprect.set('width', str(r))
                 cliprect.set('height', str(r * 2))
 
-            # Filled quadrant (appended after all path elements)
-            fill = ET.SubElement(root, f'{_NS}rect')
-            fill.set('x', str(cx - r))
-            fill.set('y', str(cy - r))
-            fill.set('width', str(r * 2))
-            fill.set('height', str(r * 2))
-            fill.set('fill', color)
-            fill.set('fill-opacity', '0.45')
-            fill.set('clip-path', f'url(#{clip_id})')
+            # Filled copy of D_Pad path, clipped to quadrant
+            if dpad is not None:
+                fill_path = copy.deepcopy(dpad)
+                if 'id' in fill_path.attrib:
+                    del fill_path.attrib['id']
+                fill_path.set('fill', color)
+                fill_path.set('fill-opacity', '0.45')
+                fill_path.set('stroke', 'none')
+                fill_path.set('clip-path', f'url(#{clip_id})')
+                root.append(fill_path)
 
     def _apply_xbox_stick_click(self, root):
         """Highlight Xbox stick outlines when clicked."""
@@ -329,6 +351,7 @@ class SvgRenderer:
     # ------------------------------------------------------------------
 
     def _apply_triggers(self, lt_root, rt_root):
+        """Apply progressive trigger fill using linearGradient on path fill."""
         for side, root, axis_name in [('left', lt_root, 'lt'),
                                        ('right', rt_root, 'rt')]:
             if root is None:
@@ -339,45 +362,59 @@ class SvgRenderer:
 
             color = self._colors.get(axis_name, '#FF4444')
 
-            # Find trigger path to copy its d attribute for clipPath
             shape_el = _find_by_id(root, f'{side}_trigger_shape')
             if shape_el is None:
-                continue
-            d_attr = shape_el.get('d', '')
-            if not d_attr:
                 continue
 
             _, _, vb_w, vb_h = _viewbox(root)
 
-            # Add <defs> with clipPath
+            # Add <defs> with linearGradient
             defs = root.find(f'{_NS}defs')
             if defs is None:
                 defs = ET.SubElement(root, f'{_NS}defs')
                 root.remove(defs)
                 root.insert(0, defs)
 
-            clip_id = f'{side}_fill_clip'
-            # Remove old clip if present
-            for old in defs.findall(f'{_NS}clipPath'):
-                if old.get('id') == clip_id:
+            # Full fill — set color directly
+            if val >= 0.99:
+                shape_el.set('fill', color)
+                shape_el.set('fill-opacity', '0.7')
+                continue
+
+            grad_id = f'{side}_fill_gradient'
+            for old in defs.findall(f'{_NS}linearGradient'):
+                if old.get('id') == grad_id:
                     defs.remove(old)
 
-            cp = ET.SubElement(defs, f'{_NS}clipPath')
-            cp.set('id', clip_id)
-            clip_path = ET.SubElement(cp, f'{_NS}path')
-            clip_path.set('d', d_attr)
+            lg = ET.SubElement(defs, f'{_NS}linearGradient')
+            lg.set('id', grad_id)
+            lg.set('gradientUnits', 'userSpaceOnUse')
+            lg.set('x1', '0')
+            lg.set('y1', str(vb_h))       # bottom
+            lg.set('x2', '0')
+            lg.set('y2', '0')             # top
 
-            # Fill rect (from bottom up)
-            fill_h = vb_h * val
-            fill_y = vb_h - fill_h
-            rect = ET.SubElement(root, f'{_NS}rect')
-            rect.set('x', '0')
-            rect.set('y', f'{fill_y:.1f}')
-            rect.set('width', str(vb_w))
-            rect.set('height', f'{fill_h:.1f}')
-            rect.set('fill', color)
-            rect.set('fill-opacity', '0.7')
-            rect.set('clip-path', f'url(#{clip_id})')
+            # Bottom portion: highlight color
+            s1 = ET.SubElement(lg, f'{_NS}stop')
+            s1.set('offset', '0')
+            s1.set('stop-color', color)
+            s1.set('stop-opacity', '0.7')
+
+            s2 = ET.SubElement(lg, f'{_NS}stop')
+            s2.set('offset', f'{val:.4f}')
+            s2.set('stop-color', color)
+            s2.set('stop-opacity', '0.7')
+
+            # Upper portion: original fill (#222222)
+            s3 = ET.SubElement(lg, f'{_NS}stop')
+            s3.set('offset', f'{val:.4f}')
+            s3.set('stop-color', '#222222')
+
+            s4 = ET.SubElement(lg, f'{_NS}stop')
+            s4.set('offset', '1')
+            s4.set('stop-color', '#222222')
+
+            shape_el.set('fill', f'url(#{grad_id})')
 
     # ------------------------------------------------------------------
     # Joystick displacement & intensity
@@ -428,7 +465,12 @@ class SvgRenderer:
             outer.set('fill', color)
             outer.set('fill-opacity', f'{min(mag * 0.5, 0.5):.2f}')
 
-            # Inner circle: fill + stroke highlight
+            # Inner circle: translate for 360° displacement + fill highlight
+            centers = {'ls': (124, 64), 'rs': (260, 117)}
+            cx, cy = centers.get(stick, (0, 0))
+            dx = x * 5.0
+            dy = y * 5.0
+            inner.set('transform', f'translate({dx:.2f},{dy:.2f})')
             inner.set('fill', color)
             inner.set('fill-opacity', f'{min(mag, 1.0):.2f}')
             inner.set('stroke', color)
