@@ -88,7 +88,13 @@ class ControllerOverlay(QWidget):
             self.renderer.set_controller_type(new_type)
             self._prev_buttons.clear()
             self._prev_axes.clear()
-            self._apply_geometry()
+            if state.connected:
+                self._apply_geometry()
+            else:
+                self.hide()
+
+        if not state.connected:
+            return
 
         self._sync_state(state)
         self.update()

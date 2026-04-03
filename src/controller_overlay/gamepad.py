@@ -187,18 +187,31 @@ class GamepadManager:
             pass
         self.state.controller_type = detect_controller_type(self.state.name)
 
+    def _reset_connection(self):
+        """Clear controller references and reset all state after disconnect.
+
+        Does NOT call SDL_GameControllerClose / SDL_JoystickClose — SDL2
+        auto-closes handles on device removal, and double-closing causes a
+        segfault on Windows.
+        """
+        self._controller = None
+        self._joystick = None
+        self._use_fallback = False
+        self._device_index = -1
+        self.state.connected = False
+        self.state.name = ""
+        self.state.controller_type = ControllerType.UNKNOWN
+        self._reset_state()
+
     def close(self):
         """Close current controller and shut down SDL."""
         import sdl2
 
         if self._controller:
             sdl2.SDL_GameControllerClose(self._controller)
-            self._controller = None
-        if self._joystick and not self._controller:
+        elif self._joystick:
             sdl2.SDL_JoystickClose(self._joystick)
-        self._joystick = None
-        self.state.connected = False
-        self._reset_state()
+        self._reset_connection()
         sdl2.SDL_Quit()
 
     def poll(self):
@@ -215,31 +228,30 @@ class GamepadManager:
         while sdl2.SDL_PollEvent(event):
             etype = event.type
             if etype == sdl2.SDL_CONTROLLERDEVICEADDED:
-                if not self.state.connected:
-                    self._open(event.cdevice.which)
+                if self.state.connected:
+                    # Stale state from missed disconnect — force cleanup
+                    self._reset_connection()
+                self._open(event.cdevice.which)
             elif etype == sdl2.SDL_CONTROLLERDEVICEREMOVED:
-                if self._controller and sdl2.SDL_GameControllerInstanceID(self._controller) == event.cdevice.which:
-                    # SDL2 already closes the controller when delivering this
-                    # event — calling SDL_GameControllerClose again would be
-                    # a double-free (segfault on Windows).
-                    self._controller = None
-                    self._joystick = None
-                    self.state.connected = False
-                    self.state.name = ""
-                    self.state.controller_type = ControllerType.UNKNOWN
-                    self._reset_state()
+                if self._controller:
+                    # SDL2 auto-closes the controller on removal.
+                    # Don't call SDL_GameControllerClose (double-free risk).
+                    self._reset_connection()
             elif etype == sdl2.SDL_JOYDEVICEADDED:
-                if not self.state.connected and not self._controller:
+                # Avoid double-open: SDL also fires this for GameController devices
+                if not self._controller:
+                    if self.state.connected:
+                        self._reset_connection()
                     self._open(event.jdevice.which)
             elif etype == sdl2.SDL_JOYDEVICEREMOVED:
                 if self._joystick and not self._controller:
-                    if sdl2.SDL_JoystickInstanceID(self._joystick) == event.jdevice.which:
-                        # SDL2 already closes the joystick — avoid double-free.
-                        self._joystick = None
-                        self.state.connected = False
-                        self.state.name = ""
-                        self.state.controller_type = ControllerType.UNKNOWN
-                        self._reset_state()
+                    self._reset_connection()
+
+        # Safety: detect disconnect that events may have missed
+        if self._controller and not sdl2.SDL_GameControllerGetAttached(self._controller):
+            self._reset_connection()
+        elif self._joystick and not self._controller and not sdl2.SDL_JoystickGetAttached(self._joystick):
+            self._reset_connection()
 
         if not self._joystick and not self._controller:
             return self.state
