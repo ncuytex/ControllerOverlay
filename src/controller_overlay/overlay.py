@@ -31,9 +31,9 @@ class ControllerOverlay(QWidget):
         self.gamepad = gamepad
         self.theme = theme
         self.opacity = opacity
-        self._pos_x = 90
-        self._pos_y = 85
-        self._scale = 30
+        self._pos_x = 50
+        self._pos_y = 0
+        self._scale = 10
         self._current_type = None
 
         # Previous state for change detection

@@ -156,6 +156,8 @@ class TrayController(QObject):
     def __init__(self, get_controller_name=None):
         super().__init__()
         self._get_controller_name = get_controller_name or (lambda: "未连接")
+        self._current_opacity = 0.9
+        self._current_theme = "white"
         self._settings_dialog = None
         self._tray = QSystemTrayIcon(create_tray_icon())
         self._menu = QMenu()
@@ -185,9 +187,9 @@ class TrayController(QObject):
             act.setData(value)
             act.setCheckable(True)
             act.setActionGroup(opacity_group)
-            if value == 0.9:
+            if value == self._current_opacity:
                 act.setChecked(True)
-            act.triggered.connect(lambda checked, v=value: self.opacity_changed.emit(v))
+            act.triggered.connect(lambda checked, v=value: self._set_opacity(v))
 
         # Theme submenu
         theme_menu = self._menu.addMenu("配色主题")
@@ -197,15 +199,23 @@ class TrayController(QObject):
             act.setData(name)
             act.setCheckable(True)
             act.setActionGroup(theme_group)
-            if name == "white":
+            if name == self._current_theme:
                 act.setChecked(True)
-            act.triggered.connect(lambda checked, n=name: self.theme_changed.emit(n))
+            act.triggered.connect(lambda checked, n=name: self._set_theme(n))
 
         self._menu.addSeparator()
 
         # Quit
         quit_act = self._menu.addAction("退出")
         quit_act.triggered.connect(self.quit_requested.emit)
+
+    def _set_opacity(self, value):
+        self._current_opacity = value
+        self.opacity_changed.emit(value)
+
+    def _set_theme(self, name):
+        self._current_theme = name
+        self.theme_changed.emit(name)
 
     def _open_settings(self):
         if self._settings_dialog is None:
