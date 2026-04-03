@@ -22,7 +22,7 @@ def _make_highlight_colors(variant):
         "dpad_up": face["x"], "dpad_down": face["x"],
         "dpad_left": face["x"], "dpad_right": face["x"],
         "ls_click": face["x"], "rs_click": face["a"],
-        "back": face["b"], "start": face["a"], "guide": face["y"],
+        "back": face["b"], "start": face["a"], "guide": "#006FCD",
         "touchpad": face["x"], "misc1": "#FF8C00",
     }
 

@@ -268,12 +268,15 @@ class SvgRenderer:
                     el.set('fill-opacity', '0.55')
                 else:
                     if el.tag == f'{_NS}g':
-                        # Group element (e.g. PS logo): highlight all child
-                        # path fills and add bright stroke for border effect.
+                        # Group element (e.g. PS logo): change child path
+                        # fills, but skip the first child (outer outline with
+                        # fill="none") to avoid a solid color block overlay.
+                        first = True
                         for child in el.iter(f'{_NS}path'):
+                            if first:
+                                first = False
+                                continue
                             child.set('fill', color)
-                            child.set('stroke', color)
-                            child.set('stroke-width', '3')
                     else:
                         el.set('fill', color)
 
