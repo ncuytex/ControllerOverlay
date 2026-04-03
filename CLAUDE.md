@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-ControllerOverlay (手柄投影) — a Windows desktop tool that displays a real-time, transparent, always-on-top overlay showing gamepad input. Supports Xbox and DualSense (PS5) controller layouts, auto-detected via SDL2. All user interaction is via the system tray icon. UI strings are in Chinese (Simplified).
+ControllerOverlay (手柄投影) — a Windows desktop tool that displays a real-time, transparent, always-on-top overlay showing gamepad input. Supports Xbox and DualSense (PS5) controller layouts, auto-detected via SDL2. All user interaction is via the system tray icon. Multi-language UI (14 languages, default: Simplified Chinese).
 
 ## Commands
 
@@ -22,7 +22,7 @@ pyinstaller ControllerOverlay.spec # Build exe (uses spec file with assets bundl
 ```
 main.py                              # Entry point (adds src/ to sys.path)
 src/controller_overlay/              # Application package
-  ├── gamepad.py, overlay.py, svg_renderer.py, renderers.py, themes.py, tray.py
+  ├── gamepad.py, overlay.py, svg_renderer.py, renderers.py, themes.py, translations.py, tray.py
 assets/                              # SVG images (controllers, triggers, logos)
 tests/                               # pytest suite + standalone test_render.py
 ControllerOverlay.spec               # PyInstaller build config
@@ -36,13 +36,14 @@ Single-threaded, timer-driven PyQt5 application. No multi-threading or locks.
 
 **Module dependency graph:**
 ```
-main.py → controller_overlay.{gamepad, overlay, tray, themes}
-overlay.py → .gamepad, .themes, .svg_renderer, .renderers
+main.py → controller_overlay.{gamepad, overlay, tray, themes, translations}
+overlay.py → .gamepad, .translations, .themes, .svg_renderer, .renderers
 svg_renderer.py → .gamepad (ControllerType enum), .renderers
 renderers.py → .gamepad (ControllerType enum only)
-tray.py → .themes
+tray.py → .themes, .translations
 gamepad.py → (lazy imports sdl2)
 themes.py → (standalone, no imports)
+translations.py → (standalone, no imports)
 ```
 
 **Data flow:**
@@ -57,6 +58,7 @@ themes.py → (standalone, no imports)
 - `TrayController.opacity_changed(float)` → closure → `overlay.set_opacity(float)`
 - `TrayController.position_changed(int, int)` → closure → `overlay.set_position(int, int)`
 - `TrayController.scale_changed(int)` → closure → `overlay.set_scale(int)`
+- `TrayController.language_changed(str)` → closure → `overlay.set_language(lang)`
 - `TrayController.quit_requested()` → `gamepad.close()` + `app.quit()`
 
 **Key modules:**
@@ -65,7 +67,8 @@ themes.py → (standalone, no imports)
 - `svg_renderer.py` — `SvgRenderer`: Core rendering engine. Loads SVG files from `assets/` as `xml.etree.ElementTree` templates (never modified in place). On each render: deep-copies templates, injects dynamic elements (e.g., Xbox left shoulder arc), modifies element attributes for highlights (button fill/stroke, trigger linearGradient fill, joystick translate transform, D-pad quadrant clipPaths), serializes to `QByteArray`, renders via `QSvgRenderer` to `QPixmap`. Uses dirty flag + analog threshold to skip unnecessary rebuilds. Asset paths resolved via `_image_dir()` which walks up from `__file__` to project root then into `assets/`
 - `renderers.py` — Pure data module. Maps logical button names to SVG element IDs: `BUTTON_MAPS[ControllerType][button_name] → list of element IDs`. Trigger placement offsets (`TRIGGER_OFFSETS`), joystick element references (`JOYSTICK_MAPS`), stick centers (`STICK_CENTERS`), D-pad geometry. Unknown controller type falls back to Xbox layout
 - `themes.py` — `Theme` dataclass with `highlight` dict (button_name → hex color). `THEMES` dict of 3 themes (white/black/neon)
-- `tray.py` — `TrayController(QObject)`: System tray with `pyqtSignal`-based menu. `SettingsDialog(QDialog)`: position (x/y 0-100) and scale (0-100) sliders with live preview
+- `tray.py` — `TrayController(QObject)`: System tray with `pyqtSignal`-based menu. `SettingsDialog(QDialog)`: position (x/y 0-100) and scale (0-100) sliders with live preview. Menu labels and dialog strings are localized via `translations.py`
+- `translations.py` — Pure data module. `TRANSLATIONS` dict maps language codes to translated UI strings. `LANGUAGES` dict maps codes to native names. `FONT_FALLBACKS` maps CJK languages to Windows built-in fonts. `t(key, lang)` function returns translated string with fallback to `DEFAULT_LANG` ("zh-CN"). 14 languages supported
 
 **SVG assets (`assets/` directory):**
 - `xbox.svg` — Xbox controller (viewBox 0 0 427 240). All elements are stroke-only paths. Key IDs: A, B, X, Y, LB_top (right shoulder), View, Menu, Share, XBOX, D_Pad. Class-based: Left_Stick (2 paths), Right_Stick (2 paths), D_Pad_Line (5 paths). Left shoulder arc is injected at runtime from `_XBOX_LB_SHOULDER_PATH` constant

@@ -7,7 +7,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtGui import QIcon, QPixmap, QPainter, QColor, QPen
 from PyQt5.QtCore import QObject, pyqtSignal, Qt
 
-from .themes import THEMES
+from .themes import THEMES, COLOR_MODES, make_theme_for_mode
 from .translations import (
     t, DEFAULT_LANG,
     LANGUAGES,
@@ -18,6 +18,9 @@ from .translations import (
     KEY_NOT_CONNECTED, KEY_OPACITY, KEY_POSITION_SETTINGS,
     KEY_QUIT, KEY_SELECT_LANGUAGE, KEY_SIZE_SETTINGS,
     KEY_VERTICAL_POS,
+    KEY_COLOR_MODE_CLASSIC, KEY_COLOR_MODE_RED,
+    KEY_COLOR_MODE_GREEN, KEY_COLOR_MODE_BLUE,
+    KEY_COLOR_MODE_CUSTOM,
 )
 
 
@@ -246,21 +249,24 @@ class SettingsDialog(QDialog):
 class TrayController(QObject):
     """System tray icon with context menu for settings."""
 
-    theme_changed = pyqtSignal(str)      # emits theme name
-    opacity_changed = pyqtSignal(float)  # emits opacity value
-    position_changed = pyqtSignal(int, int)  # emits pos_x, pos_y
-    scale_changed = pyqtSignal(int)       # emits scale value
-    language_changed = pyqtSignal(str)    # emits language code
+    theme_changed = pyqtSignal(object)        # emits Theme instance
+    opacity_changed = pyqtSignal(float)       # emits opacity value
+    position_changed = pyqtSignal(int, int)   # emits pos_x, pos_y
+    scale_changed = pyqtSignal(int)           # emits scale value
+    language_changed = pyqtSignal(str)        # emits language code
+    color_mode_saved = pyqtSignal(str, dict)  # emits (mode, custom_colors) for persistence
     quit_requested = pyqtSignal()
 
     def __init__(self, get_controller_name=None):
         super().__init__()
         self._get_controller_name = get_controller_name or (lambda: t(KEY_NOT_CONNECTED, DEFAULT_LANG))
         self._current_opacity = 0.9
-        self._current_theme = "white"
+        self._current_color_mode = "classic"
+        self._custom_colors = {}
         self._current_language = DEFAULT_LANG
         self._settings_dialog = None
         self._language_dialog = None
+        self._custom_color_dialog = None
         self._tray = QSystemTrayIcon(create_tray_icon())
         self._menu = QMenu()
         self._build_menu()
@@ -269,6 +275,11 @@ class TrayController(QObject):
             f"{t(KEY_APP_NAME, self._current_language)} - {t(KEY_NOT_CONNECTED, self._current_language)}"
         )
         self._tray.show()
+
+    def set_initial_state(self, color_mode, custom_colors):
+        """Set the initial color mode and custom colors (called from main.py)."""
+        self._current_color_mode = color_mode
+        self._custom_colors = dict(custom_colors) if custom_colors else {}
 
     def _build_menu(self):
         self._menu.clear()
@@ -299,17 +310,32 @@ class TrayController(QObject):
                 act.setChecked(True)
             act.triggered.connect(lambda checked, v=value: self._set_opacity(v))
 
-        # Theme submenu
-        theme_menu = self._menu.addMenu(t(KEY_COLOR_THEME, lang))
-        theme_group = QActionGroup(self)
-        for name in THEMES:
-            act = theme_menu.addAction(name)
-            act.setData(name)
+        # Color mode submenu
+        color_menu = self._menu.addMenu(t(KEY_COLOR_THEME, lang))
+        color_group = QActionGroup(self)
+
+        mode_label_keys = {
+            "classic": KEY_COLOR_MODE_CLASSIC,
+            "red":     KEY_COLOR_MODE_RED,
+            "green":   KEY_COLOR_MODE_GREEN,
+            "blue":    KEY_COLOR_MODE_BLUE,
+            "custom":  KEY_COLOR_MODE_CUSTOM,
+        }
+
+        for mode in COLOR_MODES:
+            label = t(mode_label_keys[mode], lang)
+            act = color_menu.addAction(label)
+            act.setData(mode)
             act.setCheckable(True)
-            act.setActionGroup(theme_group)
-            if name == self._current_theme:
+            act.setActionGroup(color_group)
+            if mode == self._current_color_mode:
                 act.setChecked(True)
-            act.triggered.connect(lambda checked, n=name: self._set_theme(n))
+            if mode == "custom":
+                act.triggered.connect(lambda checked: self._open_custom_color_dialog())
+            else:
+                act.triggered.connect(
+                    lambda checked, m=mode: self._apply_color_mode(m)
+                )
 
         # Language menu action
         language_act = self._menu.addAction(t(KEY_LANGUAGE, lang))
@@ -325,9 +351,32 @@ class TrayController(QObject):
         self._current_opacity = value
         self.opacity_changed.emit(value)
 
-    def _set_theme(self, name):
-        self._current_theme = name
-        self.theme_changed.emit(name)
+    def _apply_color_mode(self, mode):
+        """Apply a preset color mode and notify listeners."""
+        self._current_color_mode = mode
+        theme = make_theme_for_mode(mode)
+        self.theme_changed.emit(theme)
+        self.color_mode_saved.emit(mode, {})
+
+    def _open_custom_color_dialog(self):
+        """Open the custom color picker dialog."""
+        if self._custom_color_dialog is None:
+            from .custom_color_dialog import CustomColorDialog
+            self._custom_color_dialog = CustomColorDialog(
+                self._custom_colors, self._current_language
+            )
+            self._custom_color_dialog.colors_applied.connect(self._on_custom_colors)
+        self._custom_color_dialog.show()
+        self._custom_color_dialog.raise_()
+        self._custom_color_dialog.activateWindow()
+
+    def _on_custom_colors(self, colors):
+        """Called when custom color dialog applies new colors."""
+        self._custom_colors = colors
+        self._current_color_mode = "custom"
+        theme = make_theme_for_mode("custom", colors)
+        self.theme_changed.emit(theme)
+        self.color_mode_saved.emit("custom", colors)
 
     def _set_language(self, lang_code):
         self._current_language = lang_code
@@ -337,6 +386,8 @@ class TrayController(QObject):
             self._settings_dialog.set_language(lang_code)
         if self._language_dialog is not None:
             self._language_dialog.set_language(lang_code)
+        if self._custom_color_dialog is not None:
+            self._custom_color_dialog.set_language(lang_code)
 
     def _open_settings(self):
         if self._settings_dialog is None:
