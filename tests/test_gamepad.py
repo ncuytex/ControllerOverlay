@@ -1,4 +1,4 @@
-from gamepad import (
+from controller_overlay.gamepad import (
     normalize_axis, normalize_trigger,
     DEADZONE_PERCENT, AXIS_MAX,
     BUTTON_NAMES, AXIS_NAMES,

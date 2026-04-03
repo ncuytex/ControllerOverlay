@@ -1,4 +1,4 @@
-from themes import THEMES, Theme
+from controller_overlay.themes import THEMES, Theme
 
 REQUIRED_HIGHLIGHTS = (
     "a", "b", "x", "y", "lb", "rb", "lt", "rt",

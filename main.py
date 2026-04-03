@@ -1,11 +1,16 @@
+import os
 import sys
+
+# Add src/ to path so controller_overlay package is importable
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'src'))
+
 from PyQt5.QtWidgets import QApplication
 from PyQt5.QtCore import QTimer
 
-from gamepad import GamepadManager, ControllerType
-from overlay import ControllerOverlay
-from tray import TrayController
-from themes import THEMES
+from controller_overlay.gamepad import GamepadManager, ControllerType
+from controller_overlay.overlay import ControllerOverlay
+from controller_overlay.tray import TrayController
+from controller_overlay.themes import THEMES
 
 
 def main():

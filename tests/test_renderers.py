@@ -1,7 +1,7 @@
 """Tests for renderers.py — SVG element ID mappings and positioning data."""
 
-from gamepad import ControllerType
-from renderers import (
+from controller_overlay.gamepad import ControllerType
+from controller_overlay.renderers import (
     BUTTON_MAPS, TRIGGER_OFFSETS, JOYSTICK_MAPS, STICK_CENTERS,
     XBOX_BUTTON_MAP, DS_BUTTON_MAP,
     XBOX_TRIGGER_OFFSETS, DS_TRIGGER_OFFSETS,

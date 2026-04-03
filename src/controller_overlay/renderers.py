@@ -5,7 +5,7 @@ provides joystick element references, and defines trigger placement
 offsets relative to the main controller SVG.
 """
 
-from gamepad import ControllerType
+from .gamepad import ControllerType
 
 # ---------------------------------------------------------------------------
 # Button → SVG element ID mappings

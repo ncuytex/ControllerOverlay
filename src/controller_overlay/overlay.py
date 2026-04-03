@@ -12,10 +12,10 @@ from PyQt5.QtWidgets import QWidget, QApplication
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QPainter, QColor, QFont
 
-from gamepad import GamepadManager, ControllerType
-from themes import Theme
-from svg_renderer import SvgRenderer
-from renderers import TRIGGER_OFFSETS
+from .gamepad import GamepadManager, ControllerType
+from .themes import Theme
+from .svg_renderer import SvgRenderer
+from .renderers import TRIGGER_OFFSETS
 
 # Win32 click-through
 GWL_EXSTYLE = -20

@@ -17,8 +17,8 @@ from PyQt5.QtSvg import QSvgRenderer
 from PyQt5.QtGui import QPixmap, QPainter, QColor
 from PyQt5.QtCore import QByteArray, Qt, QRectF
 
-from gamepad import ControllerType
-from renderers import (
+from .gamepad import ControllerType
+from .renderers import (
     BUTTON_MAPS, TRIGGER_OFFSETS, JOYSTICK_MAPS, STICK_CENTERS,
     XBOX_DPAD_CENTER, XBOX_DPAD_RADIUS,
 )
@@ -44,8 +44,10 @@ _XBOX_LB_SHOULDER_PATH = (
 
 def _image_dir():
     if getattr(sys, 'frozen', False):
-        return os.path.dirname(sys.executable)
-    return os.path.dirname(os.path.abspath(__file__))
+        return os.path.join(os.path.dirname(sys.executable), 'assets')
+    # __file__ = <project_root>/src/controller_overlay/svg_renderer.py
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    return os.path.join(project_root, 'assets')
 
 
 # ---------------------------------------------------------------------------
@@ -265,7 +267,15 @@ class SvgRenderer:
                     el.set('fill', color)
                     el.set('fill-opacity', '0.55')
                 else:
-                    el.set('fill', color)
+                    if el.tag == f'{_NS}g':
+                        # Group element (e.g. PS logo): highlight all child
+                        # path fills and add bright stroke for border effect.
+                        for child in el.iter(f'{_NS}path'):
+                            child.set('fill', color)
+                            child.set('stroke', color)
+                            child.set('stroke-width', '3')
+                    else:
+                        el.set('fill', color)
 
         # Xbox D-pad special handling
         if is_xbox:

@@ -6,7 +6,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtGui import QIcon, QPixmap, QPainter, QColor, QPen
 from PyQt5.QtCore import QObject, pyqtSignal, Qt
 
-from themes import THEMES
+from .themes import THEMES
 
 
 def create_tray_icon():
