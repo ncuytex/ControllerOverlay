@@ -84,33 +84,27 @@ M193.500000,131.500000
 	C170.056396,90.156540 189.851974,97.644325 193.759369,112.933716 
 	C195.418228,119.424767 197.147202,125.110573 193.000000,131.000000 
 "/>
-<path fill="none" class="D_Pad_Line" opacity="1.000000" stroke="#000000" stroke-linecap="round" stroke-linejoin="round" stroke-width="3.000000"
-	d="
-M193.000000,112.500000 
-	C190.724625,113.478096 188.331711,112.964195 185.999893,112.973312 
-	C172.166779,113.027382 158.333328,113.000000 144.500000,113.000000 
-"/>
-<path fill="none" class="D_Pad_Line" opacity="1.000000" stroke="#000000" stroke-linecap="round" stroke-linejoin="round" stroke-width="3.000000"
-	d="
-M192.500000,130.500000 
-	C176.500000,130.500000 160.500000,130.500000 144.500000,130.500000 
-"/>
-<path fill="none" class="D_Pad_Line" opacity="1.000000" stroke="#000000" stroke-linecap="round" stroke-linejoin="round" stroke-width="3.000000"
-	d="
-M177.500000,113.500000 
-	C176.678329,124.500000 176.670395,135.500000 177.500000,146.500000 
-"/>
-<path fill="none" class="D_Pad_Line" opacity="1.000000" stroke="#000000" stroke-linecap="round" stroke-linejoin="round" stroke-width="3.000000"
-	d="
-M159.000000,98.000000 
-	C160.122162,106.481262 159.296783,115.000648 159.469177,123.500626 
-	C159.617828,130.830933 159.500000,138.166672 159.500000,145.500000 
-"/>
-<path fill="none" class="D_Pad_Line" opacity="1.000000" stroke="#000000" stroke-linecap="round" stroke-linejoin="round" stroke-width="3.000000"
-	d="
-M177.000000,97.500000 
-	C177.243057,102.497452 176.455612,107.529259 177.500000,112.500000 
-"/>
+<!-- D-Pad directional fill areas -->
+<rect id="dpad_up" x="159.5" y="97.5" width="18" height="15.5" fill="none" opacity="1" />
+<rect id="dpad_down" x="159.5" y="130.5" width="18" height="16" fill="none" opacity="1" />
+<rect id="dpad_left" x="144.5" y="113" width="15" height="17.5" fill="none" opacity="1" />
+<rect id="dpad_right" x="177.5" y="113" width="15.5" height="17.5" fill="none" opacity="1" />
+<!-- D-Pad grid lines: top horizontal (3 segments) -->
+<line x1="144.5" y1="113" x2="159.5" y2="113" fill="none" stroke="#000000" stroke-width="3" stroke-linecap="round" />
+<line x1="159.5" y1="113" x2="177.5" y2="113" fill="none" stroke="#000000" stroke-width="3" stroke-linecap="round" />
+<line x1="177.5" y1="113" x2="193" y2="113" fill="none" stroke="#000000" stroke-width="3" stroke-linecap="round" />
+<!-- D-Pad grid lines: bottom horizontal (3 segments) -->
+<line x1="144.5" y1="130.5" x2="159.5" y2="130.5" fill="none" stroke="#000000" stroke-width="3" stroke-linecap="round" />
+<line x1="159.5" y1="130.5" x2="177.5" y2="130.5" fill="none" stroke="#000000" stroke-width="3" stroke-linecap="round" />
+<line x1="177.5" y1="130.5" x2="192.5" y2="130.5" fill="none" stroke="#000000" stroke-width="3" stroke-linecap="round" />
+<!-- D-Pad grid lines: left vertical (3 segments) -->
+<line x1="159.5" y1="97.5" x2="159.5" y2="113" fill="none" stroke="#000000" stroke-width="3" stroke-linecap="round" />
+<line x1="159.5" y1="113" x2="159.5" y2="130.5" fill="none" stroke="#000000" stroke-width="3" stroke-linecap="round" />
+<line x1="159.5" y1="130.5" x2="159.5" y2="146.5" fill="none" stroke="#000000" stroke-width="3" stroke-linecap="round" />
+<!-- D-Pad grid lines: right vertical (3 segments) -->
+<line x1="177.5" y1="97.5" x2="177.5" y2="113" fill="none" stroke="#000000" stroke-width="3" stroke-linecap="round" />
+<line x1="177.5" y1="113" x2="177.5" y2="130.5" fill="none" stroke="#000000" stroke-width="3" stroke-linecap="round" />
+<line x1="177.5" y1="130.5" x2="177.5" y2="146.5" fill="none" stroke="#000000" stroke-width="3" stroke-linecap="round" />
 <path fill="none" id="A" opacity="1.000000" stroke="#000000" stroke-linecap="round" stroke-linejoin="round" stroke-width="3.000000"
 	d="
 M302.500000,75.000000 

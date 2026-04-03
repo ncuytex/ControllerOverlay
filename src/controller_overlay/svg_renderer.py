@@ -20,7 +20,6 @@ from PyQt5.QtCore import QByteArray, Qt, QRectF
 from .gamepad import ControllerType
 from .renderers import (
     BUTTON_MAPS, TRIGGER_OFFSETS, JOYSTICK_MAPS, STICK_CENTERS,
-    XBOX_DPAD_CENTER, XBOX_DPAD_RADIUS,
 )
 
 # Register SVG namespaces so ET.tostring() produces clean SVG
@@ -299,73 +298,15 @@ class SvgRenderer:
             self._apply_xbox_stick_click(root)
 
     def _apply_xbox_dpad(self, root):
-        """Highlight Xbox D-pad quadrants independently using D_Pad path copies."""
+        """Highlight Xbox D-pad directions by filling directional rectangles."""
         dirs = ['dpad_up', 'dpad_down', 'dpad_left', 'dpad_right']
-        active = [d for d in dirs if self._buttons.get(d)]
-        if not active:
-            return
-
-        color = self._colors.get('dpad_up', '#3498FF')
-
-        # Highlight D_Pad stroke only (no fill on original)
-        dpad = _find_by_id(root, 'D_Pad')
-        if dpad is not None:
-            dpad.set('stroke', color)
-
-        # Highlight cross lines
-        for el in _find_all_by_class(root, 'D_Pad_Line'):
-            el.set('stroke', color)
-
-        cx, cy = XBOX_DPAD_CENTER
-        r = XBOX_DPAD_RADIUS
-
-        # Ensure <defs> exists
-        defs = root.find(f'{_NS}defs')
-        if defs is None:
-            defs = ET.SubElement(root, f'{_NS}defs')
-            root.remove(defs)
-            root.insert(0, defs)
-
-        for d in active:
-            clip_id = f'clip_dpad_{d}'
-            for old in defs.findall(f'{_NS}clipPath'):
-                if old.get('id') == clip_id:
-                    defs.remove(old)
-
-            cp = ET.SubElement(defs, f'{_NS}clipPath')
-            cp.set('id', clip_id)
-            cliprect = ET.SubElement(cp, f'{_NS}rect')
-            if d == 'dpad_up':
-                cliprect.set('x', str(cx - r))
-                cliprect.set('y', str(cy - r))
-                cliprect.set('width', str(r * 2))
-                cliprect.set('height', str(r))
-            elif d == 'dpad_down':
-                cliprect.set('x', str(cx - r))
-                cliprect.set('y', str(cy))
-                cliprect.set('width', str(r * 2))
-                cliprect.set('height', str(r))
-            elif d == 'dpad_left':
-                cliprect.set('x', str(cx - r))
-                cliprect.set('y', str(cy - r))
-                cliprect.set('width', str(r))
-                cliprect.set('height', str(r * 2))
-            elif d == 'dpad_right':
-                cliprect.set('x', str(cx))
-                cliprect.set('y', str(cy - r))
-                cliprect.set('width', str(r))
-                cliprect.set('height', str(r * 2))
-
-            # Filled copy of D_Pad path, clipped to quadrant
-            if dpad is not None:
-                fill_path = copy.deepcopy(dpad)
-                if 'id' in fill_path.attrib:
-                    del fill_path.attrib['id']
-                fill_path.set('fill', color)
-                fill_path.set('fill-opacity', '0.45')
-                fill_path.set('stroke', 'none')
-                fill_path.set('clip-path', f'url(#{clip_id})')
-                root.append(fill_path)
+        for d in dirs:
+            if self._buttons.get(d):
+                color = self._colors.get(d, '#3498FF')
+                el = _find_by_id(root, d)
+                if el is not None:
+                    el.set('fill', color)
+                    el.set('fill-opacity', '0.55')
 
     def _apply_xbox_stick_click(self, root):
         """Highlight Xbox stick outlines when clicked."""
