@@ -227,7 +227,7 @@ class SvgRenderer:
         offsets = TRIGGER_OFFSETS.get(self._current_type, {})
         lo = offsets.get('left', {})
         trig_w = int(main_w * lo.get('width_frac', 0.12))
-        trig_h = int(trig_w * (138.0 / 90.0))   # original aspect ratio
+        trig_h = int(trig_w * (144.0 / 96.0))   # viewBox "-3 -3 96 144" with stroke padding
 
         # Use QPainter-based clipping for proportional trigger fill
         # (QSvgRenderer silently ignores SVG clipPath)
