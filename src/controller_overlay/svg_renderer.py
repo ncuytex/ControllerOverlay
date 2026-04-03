@@ -263,9 +263,19 @@ class SvgRenderer:
                 if el is None:
                     continue
                 if is_xbox:
-                    el.set('stroke', color)
-                    el.set('fill', color)
-                    el.set('fill-opacity', '0.55')
+                    if el.tag == f'{_NS}g':
+                        # Group element (e.g. XBOX logo): change child path
+                        # fills, but skip the first child (outer outline).
+                        first = True
+                        for child in el.iter(f'{_NS}path'):
+                            if first:
+                                first = False
+                                continue
+                            child.set('fill', color)
+                    else:
+                        el.set('stroke', color)
+                        el.set('fill', color)
+                        el.set('fill-opacity', '0.55')
                 else:
                     if el.tag == f'{_NS}g':
                         # Group element (e.g. PS logo): change child path

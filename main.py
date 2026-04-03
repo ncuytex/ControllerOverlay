@@ -11,6 +11,7 @@ from controller_overlay.gamepad import GamepadManager, ControllerType
 from controller_overlay.overlay import ControllerOverlay
 from controller_overlay.tray import TrayController
 from controller_overlay.themes import THEMES
+from controller_overlay.translations import t, KEY_NOT_CONNECTED
 
 
 def main():
@@ -27,6 +28,9 @@ def main():
     overlay = ControllerOverlay(gamepad, THEMES["white"], opacity=0.9)
     overlay.show()
 
+    # Mutable language reference so get_name() always uses current lang
+    current_lang = ["zh-CN"]
+
     # Create tray
     def get_name():
         if gamepad.state.connected:
@@ -36,7 +40,7 @@ def main():
                 ControllerType.DUALSENSE: "DualSense",
             }.get(ct, "Gamepad")
             return f"{gamepad.state.name} ({type_str})"
-        return "未连接"
+        return t(KEY_NOT_CONNECTED, current_lang[0])
 
     tray = TrayController(get_controller_name=get_name)
 
@@ -53,6 +57,10 @@ def main():
     def on_scale_changed(scale):
         overlay.set_scale(scale)
 
+    def on_language_changed(lang):
+        current_lang[0] = lang
+        overlay.set_language(lang)
+
     def on_quit():
         gamepad.close()
         app.quit()
@@ -61,6 +69,7 @@ def main():
     tray.opacity_changed.connect(on_opacity_changed)
     tray.position_changed.connect(on_position_changed)
     tray.scale_changed.connect(on_scale_changed)
+    tray.language_changed.connect(on_language_changed)
     tray.quit_requested.connect(on_quit)
 
     # Periodically update tray status (every 2s)

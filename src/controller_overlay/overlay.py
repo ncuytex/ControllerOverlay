@@ -13,6 +13,7 @@ from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QPainter, QColor, QFont
 
 from .gamepad import GamepadManager, ControllerType
+from .translations import t, get_font, KEY_NO_CONTROLLER, DEFAULT_LANG
 from .themes import Theme
 from .svg_renderer import SvgRenderer
 from .renderers import TRIGGER_OFFSETS
@@ -35,6 +36,7 @@ class ControllerOverlay(QWidget):
         self._pos_y = 0
         self._scale = 10
         self._current_type = None
+        self._language = DEFAULT_LANG
 
         # Previous state for change detection
         self._prev_buttons = {}
@@ -157,6 +159,10 @@ class ControllerOverlay(QWidget):
         self.renderer.resize_widget(scale)
         self._apply_geometry()
 
+    def set_language(self, lang: str):
+        self._language = lang
+        self.update()
+
     # ------------------------------------------------------------------
     # Geometry
     # ------------------------------------------------------------------
@@ -214,8 +220,8 @@ class ControllerOverlay(QWidget):
 
         if not state.connected:
             p.setPen(QColor("#CCCCCC"))
-            p.setFont(QFont("Microsoft YaHei", 14))
-            p.drawText(self.rect(), Qt.AlignCenter, "未连接手柄")
+            p.setFont(QFont(get_font(self._language), 14))
+            p.drawText(self.rect(), Qt.AlignCenter, t(KEY_NO_CONTROLLER, self._language))
             p.end()
             return
 
@@ -246,8 +252,8 @@ class ControllerOverlay(QWidget):
         pixmaps = self.renderer.render(main_w, main_h)
         if pixmaps is None:
             p.setPen(QColor("#CCCCCC"))
-            p.setFont(QFont("Microsoft YaHei", 14))
-            p.drawText(self.rect(), Qt.AlignCenter, "未连接手柄")
+            p.setFont(QFont(get_font(self._language), 14))
+            p.drawText(self.rect(), Qt.AlignCenter, t(KEY_NO_CONTROLLER, self._language))
             p.end()
             return
 
